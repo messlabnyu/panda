@@ -30,7 +30,7 @@ env:
 jobs:
   get_version:
     if: github.ref == 'refs/heads/dev'
-    runs-on: panda-arc
+    runs-on: ubuntu-latest
     outputs:
       v-version: ${{ steps.version.outputs.v-version }}
     steps:
