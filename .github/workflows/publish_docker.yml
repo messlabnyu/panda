@@ -122,7 +122,7 @@ jobs:
   build_release_assets:
     if: github.ref == 'refs/heads/dev'
     needs: get_version
-    runs-on: panda-arc
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         ubuntu_version:
@@ -144,7 +144,6 @@ jobs:
             image=moby/buildkit:master
             network=host
           buildkitd-config-inline: |
-            [registry."${{ secrets.PANDA_ARC_REGISTRY }}"]
               insecure = true
               http = true
 
@@ -180,6 +179,9 @@ jobs:
           build-args: |
             BASE_IMAGE=ubuntu:${{ matrix.ubuntu_version }}
             PACKAGE_VERSION=${{ env.RELEASE_VERSION }}
+          # Use standard GitHub Actions caching instead of a private registry
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build package
         working-directory: panda/debian
