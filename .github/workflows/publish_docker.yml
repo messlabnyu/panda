@@ -58,8 +58,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
         with:
+          version: latest
           driver-opts: |
-            image=moby/buildkit:master
             network=host
           buildkitd-config-inline: |
             [registry."${{ secrets.PANDA_ARC_REGISTRY }}"]
@@ -101,6 +101,8 @@ jobs:
           target: panda
           build-args: |
             REGISTRY=${{ secrets.PANDA_ARC_REGISTRY }}/proxy
+            INSTALL_PREFIX=/usr
+
       - name: Build pandadev:latest
         uses: docker/build-push-action@v7
         with:
@@ -118,6 +120,7 @@ jobs:
           target: developer
           build-args: |
             REGISTRY=${{ secrets.PANDA_ARC_REGISTRY }}/proxy
+            INSTALL_PREFIX=/usr
 
   build_release_assets:
     if: github.ref == 'refs/heads/dev'
@@ -140,8 +143,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
         with:
+          version: latest
           driver-opts: |
-            image=moby/buildkit:master
             network=host
           buildkitd-config-inline: |
               insecure = true
@@ -178,6 +181,7 @@ jobs:
             packager
           build-args: |
             BASE_IMAGE=ubuntu:${{ matrix.ubuntu_version }}
+            INSTALL_PREFIX=/usr
             PACKAGE_VERSION=${{ env.RELEASE_VERSION }}
           # Use standard GitHub Actions caching instead of a private registry
           cache-from: type=gha
@@ -189,7 +193,7 @@ jobs:
           docker run --rm -v $(pwd):/out packager bash -c "cp /*.whl /pandare.deb /out"
           mv pandare.deb pandare_${{ matrix.ubuntu_version }}.deb
       - name: Upload deb packages as artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: pandare_${{ matrix.ubuntu_version }}
           path: panda/debian/pandare*.deb
@@ -197,7 +201,7 @@ jobs:
 
       - name: Upload whl package as artifact
         if: ${{ matrix.ubuntu_version == env.PANDA_CONTAINER_UBUNTU_VERSION }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: pypanda
           path: panda/debian/pandare*.whl
@@ -214,10 +218,11 @@ jobs:
       name: pypi
       url: https://pypi.org/p/pandare  
     permissions:
-      id-token: write  
+      id-token: write
+      contents: write
     steps:
       - name: Download whl artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: pypanda
           path: dist/
@@ -226,23 +231,32 @@ jobs:
         with:
           verbose: true
     
+  # Runs on forks too!
   create_github_release:
     name: Create GitHub Release
-    if: github.ref == 'refs/heads/dev' # Runs on forks too!
     needs:
       - get_version
       - build_release_assets
+      - publish-to-pypi
+      # Override default skip behavior: Run if we are on dev AND the required 
+      # build steps succeeded AND PyPI either succeeded (main repo) or was skipped (forks).
+    if: |
+        always() &&
+        needs.get_version.result == 'success' &&
+        needs.build_release_assets.result == 'success' &&
+        (needs.publish-to-pypi.result == 'success' || needs.publish-to-pypi.result == 'skipped') &&
+        github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     permissions:
       contents: write  
     steps:
       - name: Download deb artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           pattern: pandare_*
           path: debs/
       - name: Download whl artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: pypanda
           path: dist/
